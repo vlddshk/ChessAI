@@ -11,6 +11,7 @@ from constants import (
     BORDER_COLOR, BOARD_SIZE
 )
 from game.mode import GameMode, GameModeManager
+import chess
 
 class GameInfo(QWidget):
     new_game_requested = pyqtSignal()
@@ -22,7 +23,7 @@ class GameInfo(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(250)
+        self.setFixedWidth(250)
         self.init_ui()
         self.setStyleSheet(self.get_stylesheet())
 
@@ -124,7 +125,7 @@ class GameInfo(QWidget):
         return group
     
     def create_extra_group(self):
-        group = QGroupBox(UI_TEXTS["extra_finctions"])
+        group = QGroupBox(UI_TEXTS["extra_functions"])
         layout = QVBoxLayout()
 
                 # Кнопки додаткових функцій

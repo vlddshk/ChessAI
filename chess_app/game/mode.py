@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Optional
+from typing import List
 
 class GameMode(Enum):
     """
@@ -94,7 +95,8 @@ class GameModeManager:
         """Повертає поточну конфігурацію AI"""
         return self.current_difficulty
     
-    def get_available_difficulties(self) -> list[str]:
+
+    def get_available_difficulties(self) -> List[str]:
         """Повертає список доступних рівнів складності"""
         return [diff.name for diff in self.available_difficulties]
 

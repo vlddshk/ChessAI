@@ -1,306 +1,450 @@
 import chess
+import numpy as np
+from typing import List, Tuple, Dict, Optional
+from constants import PIECE_VALUES, TENSOR_SHAPE, PIECE_TO_INDEX
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication
 
-def square_to_coords(square):
+def board_to_tensor(board: chess.Board) -> np.ndarray:
     """
-    Перетворює шаховий квадрат (0-63) у координати (file, rank) на дошці.
-    :param square: chess.Square (0-63)
-    :return: tuple (file, rank) де file (0-7 = a-h), rank (0-7 = 1-8)
+    Перетворює шахову дошку у тензорне представлення (8x8x12)
+    :param board: Шахова дошка
+    :return: Тензор numpy розміром 8x8x12
     """
-    return chess.square_file(square), chess.square_rank(square)
-
-def coords_to_square(file, rank):
-    """
-    Перетворює координати (file, rank) у шаховий квадрат.
-    :param file: int (0-7 = a-h)
-    :param rank: int (0-7 = 1-8)
-    :return: chess.Square (0-63)
-    """
-    return chess.square(file, rank)
-
-def square_to_pixel(square, square_size):
-    """
-    Перетворює шаховий квадрат у піксельні координати на дошці.
-    :param square: chess.Square (0-63)
-    :param square_size: розмір однієї клітинки у пікселях
-    :return: tuple (x, y) координати верхнього лівого кута клітинки
-    """
-    file, rank = square_to_coords(square)
-    # Перевертаємо ранг, оскільки у шахматах ранг 0 - це 1-а лінія (знизу),
-    # але в нашому відображенні ранг 0 буде зверху
-    return file * square_size, (7 - rank) * square_size
-
-def pixel_to_square(x, y, square_size):
-    """
-    Перетворює піксельні координати на шаховий квадрат.
-    :param x: координата X у пікселях
-    :param y: координата Y у пікселях
-    :param square_size: розмір однієї клітинки у пікселях
-    :return: chess.Square (0-63) або None, якщо координати поза дошкою
-    """
-    file = int(x // square_size)
-    rank = 7 - int(y // square_size)  # Інвертуємо ранг
+    tensor = np.zeros(TENSOR_SHAPE, dtype=np.float32)
     
-    if 0 <= file <= 7 and 0 <= rank <= 7:
-        return coords_to_square(file, rank)
-    return None
-
-def square_name(square):
-    """
-    Повертає назву клітинки у шаховій нотації (наприклад, "e4").
-    :param square: chess.Square (0-63)
-    :return: str (назва клітинки)
-    """
-    return chess.square_name(square)
-
-def square_from_name(name):
-    """
-    Перетворює назву клітинки у шаховий квадрат.
-    :param name: str (наприклад, "e4")
-    :return: chess.Square (0-63)
-    """
-    return chess.parse_square(name)
-
-def get_center_of_square(square, square_size):
-    """
-    Повертає координати центру клітинки у пікселях.
-    :param square: chess.Square (0-63)
-    :param square_size: розмір однієї клітинки у пікселях
-    :return: tuple (x, y) координати центру клітинки
-    """
-    x, y = square_to_pixel(square, square_size)
-    return x + square_size // 2, y + square_size // 2
-
-def is_dark_square(square):
-    """
-    Визначає, чи є клітинка темною.
-    :param square: chess.Square (0-63)
-    :return: True, якщо клітинка темна, False - якщо світла
-    """
-    file, rank = square_to_coords(square)
-    return (file + rank) % 2 == 1
-
-def get_square_color(square):
-    """
-    Повертає колір клітинки у форматі шістнадцяткового коду.
-    :param square: chess.Square (0-63)
-    :return: str (колір у форматі "#RRGGBB")
-    """
-    from chess_app.constants import DARK_SQUARE, LIGHT_SQUARE
-    return DARK_SQUARE if is_dark_square(square) else LIGHT_SQUARE
-
-def get_adjacent_squares(square):
-    """
-    Повертає сусідні клітинки у всіх напрямках.
-    :param square: chess.Square (0-63)
-    :return: list of chess.Square
-    """
-    adjacent = []
-    for direction in [
-        (1, 0), (-1, 0), (0, 1), (0, -1),   # Горизонталь/вертикаль
-        (1, 1), (1, -1), (-1, 1), (-1, -1)  # Діагоналі
-    ]:
-        file, rank = square_to_coords(square)
-        new_file, new_rank = file + direction[0], rank + direction[1]
-        if 0 <= new_file <= 7 and 0 <= new_rank <= 7:
-            adjacent.append(coords_to_square(new_file, new_rank))
-    return adjacent
-
-def distance_between_squares(square1, square2):
-    """
-    Обчислює відстань між двома клітинками за шашковою метрикою.
-    :param square1: chess.Square (0-63)
-    :param square2: chess.Square (0-63)
-    :return: int (відстань)
-    """
-    file1, rank1 = square_to_coords(square1)
-    file2, rank2 = square_to_coords(square2)
-    return max(abs(file1 - file2), abs(rank1 - rank2))
-
-def get_line_between_squares(square1, square2):
-    """
-    Повертає клітинки на лінії між двома квадратами (включно з кінцями).
-    :param square1: chess.Square (0-63)
-    :param square2: chess.Square (0-63)
-    :return: list of chess.Square
-    """
-    file1, rank1 = square_to_coords(square1)
-    file2, rank2 = square_to_coords(square2)
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            # Визначаємо індекс каналу для цієї фігури
+            piece_symbol = piece.symbol()
+            channel_idx = PIECE_TO_INDEX[piece_symbol]
+            
+            # Обчислюємо координати у тензорному представленні
+            rank, file = chess.square_rank(square), chess.square_file(square)
+            # Перевертаємо ранг, оскільки у шахматах ранг 0 - це перший ряд (знизу),
+            # а в нашому тензорі ми хочемо мати перший ряд зверху
+            tensor[7 - rank, file, channel_idx] = 1.0
     
-    squares = []
+    return tensor
+
+def fen_to_tensor(fen: str) -> np.ndarray:
+    """
+    Перетворює FEN-рядок у тензорне представлення
+    :param fen: FEN-рядок
+    :return: Тензор numpy розміром 8x8x12
+    """
+    board = chess.Board(fen)
+    return board_to_tensor(board)
+
+def get_piece_activity(board: chess.Board, color: chess.Color) -> float:
+    """
+    Обчислює активність фігур для заданого кольору
+    :param board: Шахова дошка
+    :param color: Колір (chess.WHITE або chess.BLACK)
+    :return: Значення активності
+    """
+    activity = 0.0
     
-    # Горизонтальна лінія
-    if rank1 == rank2:
-        start_file = min(file1, file2)
-        end_file = max(file1, file2)
-        for f in range(start_file, end_file + 1):
-            squares.append(coords_to_square(f, rank1))
-        return squares
+    # Кількість легальних ходів для кольору
+    legal_moves = list(board.legal_moves)
+    color_moves = [move for move in legal_moves if board.piece_at(move.from_square).color == color]
+    activity += len(color_moves) * 0.05
     
-    # Вертикальна лінія
-    if file1 == file2:
-        start_rank = min(rank1, rank2)
-        end_rank = max(rank1, rank2)
-        for r in range(start_rank, end_rank + 1):
-            squares.append(coords_to_square(file1, r))
-        return squares
+    # Центральний контроль
+    center_squares = [chess.D4, chess.D5, chess.E4, chess.E5]
+    for square in center_squares:
+        if board.is_attacked_by(color, square):
+            activity += 0.1
     
-    # Діагональна лінія
-    if abs(file1 - file2) == abs(rank1 - rank2):
-        file_step = 1 if file2 > file1 else -1
-        rank_step = 1 if rank2 > rank1 else -1
-        steps = abs(file1 - file2)
+    # Атака на ворожі фігури
+    enemy_color = not color
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece and piece.color == enemy_color:
+            if board.is_attacked_by(color, square):
+                # Додаємо бонус за атаку на фігуру, пропорційно її вартості
+                piece_value = abs(PIECE_VALUES.get(piece.symbol(), 0))
+                activity += piece_value * 0.05
+    
+    return activity
+
+def evaluate_position(board: chess.Board) -> float:
+    """
+    Комплексна оцінка позиції
+    :param board: Шахова дошка
+    :return: Оцінка позиції (додатня - перевага білих)
+    """
+    # Матеріальний баланс
+    material = 0.0
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            material += PIECE_VALUES.get(piece.symbol(), 0)
+    
+    # Активність фігур
+    white_activity = get_piece_activity(board, chess.WHITE)
+    black_activity = get_piece_activity(board, chess.BLACK)
+    activity = white_activity - black_activity
+    
+    # Безпека короля
+    white_king_safety = king_safety_score(board, chess.WHITE)
+    black_king_safety = king_safety_score(board, chess.BLACK)
+    king_safety = white_king_safety - black_king_safety
+    
+    # Структура пішаків
+    white_pawn_structure = pawn_structure_score(board, chess.WHITE)
+    black_pawn_structure = pawn_structure_score(board, chess.BLACK)
+    pawn_structure = white_pawn_structure - black_pawn_structure
+    
+    # Комбінована оцінка
+    evaluation = material + activity + king_safety * 0.5 + pawn_structure * 0.3
+    
+    return evaluation
+
+def king_safety_score(board: chess.Board, color: chess.Color) -> float:
+    """
+    Оцінка безпеки короля
+    :param board: Шахова дошка
+    :param color: Колір (chess.WHITE або chess.BLACK)
+    :return: Оцінка безпеки
+    """
+    king_square = board.king(color)
+    if king_square is None:
+        return 0.0
+    
+    safety = 0.0
+    enemy_color = not color
+    
+    # Штраф за відкритість короля
+    if board.has_castling_rights(color):
+        # Король у безпеці, якщо він не рокірувався, але має права на рокіровку
+        safety += 0.2
+    elif not board.has_castling_rights(color) and board.castling_rights:
+        # Рокіровка вже виконана - бонус
+        safety += 0.3
+    
+    # Перевірка на шахи
+    if board.is_check():
+        safety -= 0.5
+    
+    # Кількість ворожих атак на короля
+    attack_count = 0
+    for attacker in board.attackers(enemy_color, king_square):
+        piece = board.piece_at(attacker)
+        if piece:
+            # Вага атаки залежить від типу фігури
+            attack_weight = {
+                chess.PAWN: 0.1,
+                chess.KNIGHT: 0.2,
+                chess.BISHOP: 0.2,
+                chess.ROOK: 0.3,
+                chess.QUEEN: 0.4
+            }.get(piece.piece_type, 0.1)
+            safety -= attack_weight
+            attack_count += 1
+    
+    # Додатковий штраф за кілька атак
+    if attack_count > 1:
+        safety -= 0.1 * attack_count
+    
+    # Захистні фігури навколо короля
+    defender_count = 0
+    for square in chess.SQUARES:
+        if chess.square_distance(square, king_square) <= 1:
+            piece = board.piece_at(square)
+            if piece and piece.color == color:
+                defender_count += 1
+    
+    # Бонус за захист
+    if defender_count >= 3:
+        safety += 0.2
+    elif defender_count <= 1:
+        safety -= 0.2
+    
+    return safety
+
+def pawn_structure_score(board: chess.Board, color: chess.Color) -> float:
+    """
+    Оцінка структури пішаків
+    :param board: Шахова дошка
+    :param color: Колір (chess.WHITE або chess.BLACK)
+    :return: Оцінка структури пішаків
+    """
+    score = 0.0
+    pawns = list(board.pieces(chess.PAWN, color))
+    
+    if not pawns:
+        return 0.0
+    
+    # Перевірка на подвоєних пішаків
+    files = {}
+    for pawn in pawns:
+        file = chess.square_file(pawn)
+        files.setdefault(file, 0)
+        files[file] += 1
+    
+    doubled = sum(count - 1 for count in files.values() if count > 1)
+    score -= doubled * 0.2
+    
+    # Перевірка на ізольованих пішаків
+    isolated = 0
+    for file in files:
+        if not any(f in (file-1, file+1) for f in files if f != file):
+            isolated += files[file]
+    score -= isolated * 0.15
+    
+    # Перевірка на прохідних пішаків
+    passed = 0
+    for pawn in pawns:
+        file = chess.square_file(pawn)
+        rank = chess.square_rank(pawn)
         
-        for i in range(steps + 1):
-            f = file1 + i * file_step
-            r = rank1 + i * rank_step
-            squares.append(coords_to_square(f, r))
-        return squares
+        # Визначаємо напрямок руху
+        direction = 1 if color == chess.WHITE else -1
+        enemy_pawns = board.pieces(chess.PAWN, not color)
+        
+        # Перевіряємо чи немає ворожих пішаків попереду
+        has_enemy_pawns = False
+        for enemy_pawn in enemy_pawns:
+            enemy_file = chess.square_file(enemy_pawn)
+            enemy_rank = chess.square_rank(enemy_pawn)
+            
+            # Перевіряємо чи ворожий пішак може атакувати або блокувати нашого
+            if abs(enemy_file - file) <= 1:
+                if color == chess.WHITE:
+                    if enemy_rank > rank:
+                        has_enemy_pawns = True
+                        break
+                else:
+                    if enemy_rank < rank:
+                        has_enemy_pawns = True
+                        break
+        
+        if not has_enemy_pawns:
+            passed += 1
+            # Додатковий бонус за просунутість
+            if color == chess.WHITE:
+                advance_bonus = rank / 7.0
+            else:
+                advance_bonus = (7 - rank) / 7.0
+            score += 0.3 + advance_bonus * 0.2
     
-    # Якщо клітинки не на одній лінії
-    return []
-
-def get_square_from_mouse_event(event, board_widget):
-    """
-    Обчислює шаховий квадрат на основі події миші.
-    :param event: QMouseEvent
-    :param board_widget: BoardWidget, на якому відбулася подія
-    :return: chess.Square або None
-    """
-    pos = event.pos()
-    return pixel_to_square(pos.x(), pos.y(), board_widget.square_size)
-
-def get_piece_symbol_at_square(board, square):
-    """
-    Повертає символ фігури на заданій клітинці.
-    :param board: chess.Board
-    :param square: chess.Square
-    :return: str (символ фігури) або None
-    """
-    piece = board.piece_at(square)
-    return piece.symbol() if piece else None
-
-def get_king_square(board, color):
-    """
-    Повертає позицію короля заданого кольору.
-    :param board: chess.Board
-    :param color: chess.WHITE або chess.BLACK
-    :return: chess.Square
-    """
-    return board.king(color)
-
-def is_square_attacked(board, square, by_color):
-    """
-    Перевіряє, чи атакується клітинка фігурами заданого кольору.
-    :param board: chess.Board
-    :param square: chess.Square
-    :param by_color: chess.WHITE або chess.BLACK
-    :return: bool
-    """
-    return board.is_attacked_by(by_color, square)
-
-def get_attacking_squares(board, square, attacker_color):
-    """
-    Повертає список клітинок, звідки фігури заданого кольору атакують цю клітинку.
-    :param board: chess.Board
-    :param square: chess.Square
-    :param attacker_color: chess.WHITE або chess.BLACK
-    :return: list of chess.Square
-    """
-    attackers = []
-    for move in board.generate_legal_captures():
-        if move.to_square == square and board.piece_at(move.from_square).color == attacker_color:
-            attackers.append(move.from_square)
-    return attackers
-
-def get_castling_squares(color, kingside=True):
-    """
-    Повертає клітинки, пов'язані з рокіровкою.
-    :param color: chess.WHITE або chess.BLACK
-    :param kingside: True для короткої рокіровки, False для довгої
-    :return: tuple (king_from, king_to, rook_from, rook_to)
-    """
-    if color == chess.WHITE:
-        if kingside:
-            return chess.E1, chess.G1, chess.H1, chess.F1
-        else:
-            return chess.E1, chess.C1, chess.A1, chess.D1
-    else:
-        if kingside:
-            return chess.E8, chess.G8, chess.H8, chess.F8
-        else:
-            return chess.E8, chess.C8, chess.A8, chess.D8
-
-def get_en_passant_capture_square(board):
-    """
-    Повертає клітинку, де може відбутися взяття на проході, або None.
-    :param board: chess.Board
-    :return: chess.Square або None
-    """
-    if board.ep_square is not None:
-        return board.ep_square
-    return None
-
-def get_promotion_squares(color):
-    """
-    Повертає клітинки, на яких пішак може перетворитись на фігуру.
-    :param color: chess.WHITE або chess.BLACK
-    :return: list of chess.Square (8 клітинок)
-    """
-    if color == chess.WHITE:
-        return [chess.square(file, 7) for file in range(8)]  # 8-а лінія
-    else:
-        return [chess.square(file, 0) for file in range(8)]  # 1-а лінія
-
-def square_to_ui_position(square, square_size):
-    """
-    Повертає позицію для відображення фігури у віджеті.
-    :param square: chess.Square
-    :param square_size: розмір клітинки
-    :return: QPoint
-    """
-    from PyQt5.QtCore import QPoint
-    x, y = square_to_pixel(square, square_size)
-    return QPoint(x, y)
-
-def get_square_at_direction(square, direction, steps=1):
-    """
-    Повертає клітинку у заданому напрямку.
-    :param square: початкова клітинка
-    :param direction: tuple (delta_file, delta_rank)
-    :param steps: кількість кроків
-    :return: chess.Square або None, якщо поза дошкою
-    """
-    file, rank = square_to_coords(square)
-    new_file = file + direction[0] * steps
-    new_rank = rank + direction[1] * steps
+    # Бонус за пов'язані пішаки
+    connected = 0
+    for pawn in pawns:
+        pawn_file = chess.square_file(pawn)
+        pawn_rank = chess.square_rank(pawn)
+        
+        # Шукаємо пішака на сусідніх файлах
+        for adj_file in (pawn_file-1, pawn_file+1):
+            if 0 <= adj_file <= 7:
+                # Перевіряємо чи є пішак на тому ж або попередньому рядку
+                for adj_rank in (pawn_rank, pawn_rank - direction):
+                    if 0 <= adj_rank <= 7:
+                        adj_square = chess.square(adj_file, adj_rank)
+                        if board.piece_type_at(adj_square) == chess.PAWN and board.color_at(adj_square) == color:
+                            connected += 1
+                            break
     
-    if 0 <= new_file <= 7 and 0 <= new_rank <= 7:
-        return coords_to_square(new_file, new_rank)
-    return None
+    score += connected * 0.1
+    
+    return score
+
+def get_position_features(board: chess.Board) -> Dict[str, float]:
+    """
+    Повертає словник з ключовими характеристиками позиції
+    :param board: Шахова дошка
+    :return: Словник характеристик
+    """
+    features = {
+        "material_balance": 0.0,
+        "piece_activity_white": 0.0,
+        "piece_activity_black": 0.0,
+        "king_safety_white": 0.0,
+        "king_safety_black": 0.0,
+        "pawn_structure_white": 0.0,
+        "pawn_structure_black": 0.0,
+        "center_control_white": 0.0,
+        "center_control_black": 0.0,
+        "development_white": 0.0,
+        "development_black": 0.0,
+    }
+    
+    # Матеріальний баланс
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            features["material_balance"] += PIECE_VALUES.get(piece.symbol(), 0)
+    
+    # Активність фігур
+    features["piece_activity_white"] = get_piece_activity(board, chess.WHITE)
+    features["piece_activity_black"] = get_piece_activity(board, chess.BLACK)
+    
+    # Безпека короля
+    features["king_safety_white"] = king_safety_score(board, chess.WHITE)
+    features["king_safety_black"] = king_safety_score(board, chess.BLACK)
+    
+    # Структура пішаків
+    features["pawn_structure_white"] = pawn_structure_score(board, chess.WHITE)
+    features["pawn_structure_black"] = pawn_structure_score(board, chess.BLACK)
+    
+    # Контроль центру
+    center_squares = [chess.D4, chess.D5, chess.E4, chess.E5]
+    for square in center_squares:
+        if board.is_attacked_by(chess.WHITE, square):
+            features["center_control_white"] += 0.1
+        if board.is_attacked_by(chess.BLACK, square):
+            features["center_control_black"] += 0.1
+    
+    # Розвиток фігур (кількість фігур на початковій позиції)
+    back_rank = [0, 1, 2, 3, 4, 5, 6, 7] if board.turn == chess.WHITE else [56, 57, 58, 59, 60, 61, 62, 63]
+    for square in back_rank:
+        piece = board.piece_at(square)
+        if piece and piece.color == chess.WHITE:
+            if piece.piece_type != chess.KING:  # Король може залишатися
+                features["development_white"] -= 0.1
+        if piece and piece.color == chess.BLACK:
+            if piece.piece_type != chess.KING:
+                features["development_black"] -= 0.1
+    
+    return features
+
+def is_endgame(board: chess.Board) -> bool:
+    """
+    Визначає, чи позиція є ендшпілем
+    :param board: Шахова дошка
+    :return: True, якщо ендшпіль, False - інакше
+    """
+    # Критерії ендшпілю:
+    # 1. Залишилося мало фігур
+    if len(board.piece_map()) <= 10:
+        return True
+    
+    # 2. Ферзі обміняні
+    if board.pieces(chess.QUEEN, chess.WHITE) and board.pieces(chess.QUEEN, chess.BLACK):
+        return False
+    
+    # 3. У одного з гравців немає ферзя
+    if not board.pieces(chess.QUEEN, chess.WHITE) or not board.pieces(chess.QUEEN, chess.BLACK):
+        return True
+    
+    # 4. У гравця залишився тільки король і пішаки
+    white_pieces = board.pieces_mask(chess.WHITE, chess.ALL_PIECES)
+    black_pieces = board.pieces_mask(chess.BLACK, chess.ALL_PIECES)
+    
+    # Видалити короля з масок
+    white_pieces &= ~board.pieces_mask(chess.WHITE, chess.KING)
+    black_pieces &= ~board.pieces_mask(chess.BLACK, chess.KING)
+    
+    # Якщо у гравця тільки король і пішаки
+    if chess.popcount(white_pieces) == 0 and chess.popcount(black_pieces) == 0:
+        return False  # Не ендшпіль, якщо у обох тільки королі
+    
+    if (chess.popcount(white_pieces) == 0 and 
+        board.pieces_mask(chess.WHITE, chess.PAWN) == white_pieces):
+        return True
+    
+    if (chess.popcount(black_pieces) == 0 and 
+        board.pieces_mask(chess.BLACK, chess.PAWN) == black_pieces):
+        return True
+    
+    return False
+
+def get_position_complexity(board: chess.Board) -> float:
+    """
+    Оцінює складність позиції (кількість можливих варіантів)
+    :param board: Шахова дошка
+    :return: Значення складності (0-1)
+    """
+    # Кількість легальних ходів
+    legal_moves = list(board.legal_moves)
+    total_moves = len(legal_moves)
+    
+    # Середня кількість відповідей
+    avg_response = 0
+    for move in legal_moves[:5]:  # Обмежуємо для продуктивності
+        board.push(move)
+        avg_response += len(list(board.legal_moves))
+        board.pop()
+    
+    if len(legal_moves) > 0:
+        avg_response /= min(5, len(legal_moves))
+    
+    # Складність = (кількість ходів * середня кількість відповідей) / 100
+    complexity = (total_moves * avg_response) / 100.0
+    return min(complexity, 1.0)  # Обмежуємо до 1.0
+
+def compare_positions(fen1: str, fen2: str) -> float:
+    """
+    Порівнює дві позиції та повертає коефіцієнт подібності (0-1)
+    :param fen1: FEN першої позиції
+    :param fen2: FEN другої позиції
+    :return: Коефіцієнт подібності (1 - ідентичні позиції)
+    """
+    board1 = chess.Board(fen1)
+    board2 = chess.Board(fen2)
+    
+    total_squares = 64
+    same_squares = 0
+    
+    for square in chess.SQUARES:
+        piece1 = board1.piece_at(square)
+        piece2 = board2.piece_at(square)
+        
+        if piece1 == piece2:
+            same_squares += 1
+        elif piece1 is None and piece2 is None:
+            same_squares += 1
+    
+    return same_squares / total_squares
+
+def get_piece_icon(symbol, size=32):
+    """
+    Повертає іконку фігури для використання в інтерфейсі
+    :param symbol: Символ фігури (наприклад, 'K', 'q')
+    :param size: Розмір іконки
+    :return: QIcon
+    """
+    from ui.pieces import PieceRenderer  # Локальний імпорт, щоб уникнути циклічних залежностей
+    renderer = PieceRenderer()
+    pixmap = renderer.get_piece_pixmap(symbol, size)
+    if pixmap:
+        return QIcon(pixmap)
+    return QIcon()
 
 # Тестування функцій
 if __name__ == "__main__":
-    # Приклади використання
-    e4 = square_from_name("e4")
-    print(f"e4 square: {e4}")
-    print(f"e4 coords: {square_to_coords(e4)}")
-    print(f"e4 name: {square_name(e4)}")
+    # Створюємо тестову позицію
+    board = chess.Board()
     
-    print("\nПіксельні координати для e4 (розмір клітинки=60):")
-    print(f"Top-left: {square_to_pixel(e4, 60)}")
-    print(f"Center: {get_center_of_square(e4, 60)}")
+    print("Початкова позиція:")
+    print(board)
     
-    print("\nПеревірка темних клітинок:")
-    print(f"a1 (долі): {'dark' if is_dark_square(chess.A1) else 'light'}")
-    print(f"h8 (угорі): {'dark' if is_dark_square(chess.H8) else 'light'}")
+    # Тестування перетворення в тензор
+    tensor = board_to_tensor(board)
+    print(f"\nРозмір тензора: {tensor.shape}")
+    print(f"Кількість ненульових елементів: {np.count_nonzero(tensor)}")
     
-    print("\nСусідні клітинки для e4:")
-    for sq in get_adjacent_squares(e4):
-        print(square_name(sq))
+    # Оцінка позиції
+    evaluation = evaluate_position(board)
+    print(f"\nОцінка початкової позиції: {evaluation:.2f}")
     
-    print("\nВідстань між a1 та h8:")
-    print(distance_between_squares(chess.A1, chess.H8))
+    # Характеристики позиції
+    features = get_position_features(board)
+    print("\nХарактеристики позиції:")
+    for key, value in features.items():
+        print(f"{key}: {value:.2f}")
     
-    print("\nЛінія між a1 та h8:")
-    for sq in get_line_between_squares(chess.A1, chess.H8):
-        print(square_name(sq))
+    # Перевірка на ендшпіль
+    print(f"\nЧи є ендшпіль? {is_endgame(board)}")
+    
+    # Складність позиції
+    complexity = get_position_complexity(board)
+    print(f"\nСкладність позиції: {complexity:.2f}")
+    
+    # Порівняння позицій
+    board2 = chess.Board()
+    board2.push_san("e4")
+    similarity = compare_positions(board.fen(), board2.fen())
+    print(f"\nПодібність позицій: {similarity:.2f}")

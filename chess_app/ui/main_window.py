@@ -1,17 +1,17 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
-    QMenuBar, QAction, QFileDialog, QMessageBox
+    QMenuBar, QAction, QFileDialog, QMessageBox, QActionGroup
 )
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtCore import Qt
 from .board_widget import BoardWidget
 from .game_info import GameInfo
-from .menu import GameMenu
-from chess_app.game.controller import GameController
-from chess_app.game.mode import GameMode, GameModeManager
-from chess_app.ai.minimax_ai import MinimaxAI
-from chess_app.ai.tf_evaluator import TFEvaluator
-from chess_app.constants import (
+from .menu import ChessMenuBar 
+from game.controller import GameController
+from game.mode import GameMode, GameModeManager
+from ai.minimax_ai import MinimaxAI
+from ai.tf_evaluator import TFEvaluator
+from constants import (
     UI_TEXTS, BOARD_SIZE, BACKGROUND_COLOR,
     MODELS_DIR, DEFAULT_MODEL
 )
@@ -325,10 +325,10 @@ class MainWindow(QMainWindow):
         about_text = f"""
         <b>{UI_TEXTS['window_title']}</b><br><br>
         Версія: 1.0.0<br>
-        Розробник: Ваша компанія<br><br>
+        Розробник: DSHK MEGA CORPORATION<br><br>
         Шаховий додаток з підтримкою гри проти штучного інтелекту.<br>
         Реалізовано за допомогою Python, PyQt5 та TensorFlow.<br><br>
-        © 2023 Всі права захищені.
+        © 2025 Всі права захищені ВлАдіКоМ та СоФієЮ.
         """
         QMessageBox.about(self, UI_TEXTS["about"], about_text)
     

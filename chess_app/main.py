@@ -1,7 +1,7 @@
 import sys 
 import os 
 import logging 
-from PyQt5.QtWidgets import QApplication 
+from PyQt5.QtWidgets import QApplication, QMessageBox 
 from ui.main_window import MainWindow 
 from constants import UI_TEXTS 
 
@@ -32,7 +32,7 @@ def main():
     try:
         app = QApplication(sys.argv)
         app.setApplicationName(UI_TEXTS["window_title"])
-        app.setAplicationVersion("1.0.0")
+        app.setApplicationVersion("1.0.0")
 
         logger.info("Створення головного вікна")
         window = MainWindow()
@@ -52,14 +52,14 @@ def main():
         return return_code
     
     except Exception as e:
-        logger.exсeption("Критична помилка під час роботи додатку")
+        logger.exception("Критична помилка під час роботи додатку")
         show_critical_error(str(e))
         return 1
     
 def check_resources():
     """Перевіряє наявність критично важливих ресурсів"""
     # Перевірка зображень фігур
-    from chess_app.constants import PIECES_DIR, PIECE_IMAGES
+    from constants import PIECES_DIR, PIECE_IMAGES
     
     for piece_type, filename in PIECE_IMAGES.items():
         path = os.path.join(PIECES_DIR, filename)
@@ -68,7 +68,7 @@ def check_resources():
             return False
     
     # Перевірка базової моделі AI (не є критичною)
-    from chess_app.constants import DEFAULT_MODEL
+    from constants import DEFAULT_MODEL
     if not os.path.exists(DEFAULT_MODEL):
         logging.warning(f"Базова модель AI не знайдена: {DEFAULT_MODEL}")
     

@@ -1,11 +1,11 @@
 import chess
 import time
 from PyQt5.QtCore import QObject, pyqtSignal
-from chess_app.game.state import ChessState
-from chess_app.game.mode import GameMode, GameModeManager
-from chess_app.ai.interface import AIInterface
-from chess_app.ai.minimax_ai import MinimaxAI
-from chess_app.constants import (
+from game.state import ChessState
+from game.mode import GameMode, GameModeManager
+from ai.interface import AIInterface
+from ai.minimax_ai import MinimaxAI
+from constants import (
     UI_TEXTS, GAME_STATE_ONGOING, 
     GAME_STATE_CHECKMATE, GAME_STATE_STALEMATE, 
     GAME_STATE_DRAW

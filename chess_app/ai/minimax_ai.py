@@ -2,8 +2,8 @@ import chess
 import numpy as np
 import time
 from .interface import AIInterface
-from ..utils.fen_converter import fen_to_tensor
-from ..constants import PIECE_VALUES, TENSOR_SHAPE
+from utils.fen_converter import fen_to_tensor
+from constants import PIECE_VALUES, TENSOR_SHAPE
 
 class MinimaxAI(AIInterface):
     def __init__(self, depth=3, use_nn=False, evaluator=None):
