@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QWidget, QGridLayout, QMessageBox
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
-from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
+from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QFont
 from .pieces import ChessSquare, PiecePromotionDialog
 from game.state import ChessState
 from constants import (
@@ -8,15 +8,17 @@ from constants import (
     SELECTED_COLOR, POSSIBLE_MOVE_COLOR,
     CHECK_COLOR, LAST_MOVE_COLOR,
     UI_TEXTS, GAME_STATE_CHECKMATE,
-    GAME_STATE_STALEMATE, GAME_STATE_DRAW
+    GAME_STATE_STALEMATE, GAME_STATE_DRAW,
+    LIGHT_SQUARE, DARK_SQUARE
 )
 import chess
 
 class BoardWidget(QWidget):
     # Сигнали
-    move_made = pyqtSignal(str)         # Сигнал про виконання ходу (UCI)
-    game_state_changed = pyqtSignal(str)  # Сигнал про зміну стану гри
+    move_made = pyqtSignal(str)               # Сигнал про виконання ходу (UCI)
+    game_state_changed = pyqtSignal(str)      # Сигнал про зміну стану гри
     promotion_required = pyqtSignal(str, chess.Piece)  # Сигнал про необхідність перетворення пішака
+    square_selected = pyqtSignal(str)         # Сигнал про вибір клітинки
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,48 +26,41 @@ class BoardWidget(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         
         # Ініціалізація стану
-        self.game_state = ChessState()
+        self.game_controller = None  # Буде встановлено ззовні
         self.selected_square = None
         self.possible_moves = []
-        self.last_move_squares = []
+        self.last_move = None
         self.check_square = None
         self.promotion_move = None
         
         # Створення клітинок дошки
         self.squares = {}
         self.init_board()
-        
-        # Підключення сигналів
-        self.game_state.game_state_changed = self.update_board_state
-        
+    
     def init_board(self):
         """Ініціалізація шахової дошки з 64 клітинками"""
-        for square in chess.SQUARES:
-            rank = chess.square_rank(square)
-            file = chess.square_file(square)
-            square_widget = ChessSquare(square)
-            square_widget.mousePressEvent = lambda event, sq=square: self.square_clicked(sq)
-            self.squares[square] = square_widget
-        
         # Розміщення клітинок у сітці
         layout = QGridLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        for square in chess.SQUARES:
-            rank = 7 - chess.square_rank(square)  # Перевертаємо ранг для коректного відображення
-            file = chess.square_file(square)
-            layout.addWidget(self.squares[square], rank, file)
+        for rank in range(8):
+            for file in range(8):
+                square = chess.square(file, 7 - rank)  # Перевертаємо ранг для коректного відображення
+                square_widget = ChessSquare(square)
+                square_widget.mousePressEvent = lambda event, sq=square: self.square_clicked(sq)
+                self.squares[square] = square_widget
+                layout.addWidget(square_widget, rank, file)
         
         self.setLayout(layout)
-        self.update_board()
     
-    def reset_board(self, fen=None):
-        """Скидання дошки до початкового стану або заданої FEN позиції"""
-        self.game_state.reset(fen)
+    def reset_board(self):
+        """Скидання дошки до початкового стану"""
+        if self.game_controller:
+            self.game_controller.reset()
         self.selected_square = None
         self.possible_moves = []
-        self.last_move_squares = []
+        self.last_move = None
         self.check_square = None
         self.promotion_move = None
         self.update_board()
@@ -73,9 +68,14 @@ class BoardWidget(QWidget):
     
     def update_board(self):
         """Оновлення відображення всіх клітинок дошки"""
+        if not self.game_controller:
+            return
+            
+        board = self.game_controller.get_board_state()
+        
         # Оновлення фігур
         for square in chess.SQUARES:
-            piece = self.game_state.get_piece_at(square)
+            piece = board.piece_at(square)
             symbol = piece.symbol() if piece else None
             self.squares[square].set_piece(symbol)
         
@@ -92,61 +92,61 @@ class BoardWidget(QWidget):
             self.squares[self.selected_square].set_selected(True)
             
             # Підсвічування можливих ходів
-            for move_uci in self.possible_moves:
-                move = chess.Move.from_uci(move_uci)
-                if move.from_square == self.selected_square:
-                    self.squares[move.to_square].set_possible_move(True)
+            for move in self.possible_moves:
+                move_obj = chess.Move.from_uci(move)
+                if move_obj.from_square == self.selected_square:
+                    self.squares[move_obj.to_square].set_possible_move(True)
         
         # Підсвічування останнього ходу
-        last_move = self.game_state.get_last_move()
-        if last_move:
-            move = chess.Move.from_uci(last_move)
-            self.squares[move.from_square].set_last_move(True)
-            self.squares[move.to_square].set_last_move(True)
+        if self.last_move:
+            move_obj = chess.Move.from_uci(self.last_move)
+            self.squares[move_obj.from_square].set_last_move(True)
+            self.squares[move_obj.to_square].set_last_move(True)
         
         # Підсвічування шаха
         if self.check_square is not None:
             self.squares[self.check_square].set_in_check(True)
     
-    def update_board_state(self):
+    def update_board_state(self, board):
         """Оновлення стану дошки на основі гри"""
-        # Перевірка шаха
-        if self.game_state.get_game_state() == "check":
-            turn = self.game_state.get_turn()
-            self.check_square = self.game_state.get_king_square(turn)
+        if not self.game_controller:
+            return
+            
+        # Оновлення стану шаха
+        if board.is_check():
+            turn = board.turn
+            king_square = board.king(turn)
+            if king_square is not None:
+                self.check_square = king_square
         else:
             self.check_square = None
         
-        # Оновлення текстового стану
-        state = self.game_state.get_game_state()
-        if state == GAME_STATE_CHECKMATE:
-            winner = "чорні" if self.game_state.get_turn() == chess.WHITE else "білі"
-            self.game_state_changed.emit(f"{UI_TEXTS['game_over']} - {UI_TEXTS['checkmate_white' if winner == 'чорні' else 'checkmate_black']}")
-        elif state == GAME_STATE_STALEMATE:
-            self.game_state_changed.emit(UI_TEXTS["stalemate"])
-        elif state == GAME_STATE_DRAW:
-            self.game_state_changed.emit(UI_TEXTS["draw"])
-        elif state == "check":
-            self.game_state_changed.emit(UI_TEXTS["check"])
+        # Оновлення останнього ходу
+        if board.move_stack:
+            self.last_move = board.move_stack[-1].uci()
         else:
-            turn_text = UI_TEXTS["turn_white"] if self.game_state.get_turn() == chess.WHITE else UI_TEXTS["turn_black"]
-            self.game_state_changed.emit(turn_text)
+            self.last_move = None
         
         self.update_board()
     
     def square_clicked(self, square):
         """Обробка кліку на клітинці"""
-        if self.game_state.is_game_over():
+        if not self.game_controller or self.game_controller.is_game_over():
             return
         
-        piece = self.game_state.get_piece_at(square)
+        # Повідомляємо про вибір клітинки
+        square_name = chess.square_name(square)
+        self.square_selected.emit(square_name)
+        
+        piece = self.game_controller.get_board_state().piece_at(square)
+        current_turn = self.game_controller.get_turn()
         
         # Якщо немає обраної клітинки
         if self.selected_square is None:
             # Клік на фігурі гравця
-            if piece and piece.color == self.game_state.get_turn():
+            if piece and piece.color == current_turn:
                 self.selected_square = square
-                self.possible_moves = self.game_state.get_legal_moves(square)
+                self.possible_moves = self.game_controller.get_legal_moves(square)
                 self.update_board()
         
         # Якщо вже є обрана клітинка
@@ -172,7 +172,7 @@ class BoardWidget(QWidget):
                 move_obj = chess.Move.from_uci(move_uci)
                 
                 # Перевірка чи це перетворення пішака
-                if move_obj.promotion is not None:
+                if self.is_promotion_move(move_obj):
                     self.promotion_move = move_uci
                     self.show_promotion_dialog(move_obj)
                     return
@@ -181,9 +181,9 @@ class BoardWidget(QWidget):
                 self.make_move(move_uci)
             else:
                 # Клік на іншу фігуру гравця - зміна вибору
-                if piece and piece.color == self.game_state.get_turn():
+                if piece and piece.color == current_turn:
                     self.selected_square = square
-                    self.possible_moves = self.game_state.get_legal_moves(square)
+                    self.possible_moves = self.game_controller.get_legal_moves(square)
                     self.update_board()
                 else:
                     # Скасування вибору
@@ -191,20 +191,29 @@ class BoardWidget(QWidget):
                     self.possible_moves = []
                     self.update_board()
     
+    def is_promotion_move(self, move):
+        """Перевіряє чи хід є перетворенням пішака"""
+        board = self.game_controller.get_board_state()
+        piece = board.piece_at(move.from_square)
+        if piece and piece.piece_type == chess.PAWN:
+            to_rank = chess.square_rank(move.to_square)
+            if to_rank in [0, 7]:  # Пішак досяг кінця дошки
+                return True
+        return False
+    
     def make_move(self, move_uci):
         """Виконання ходу та оновлення стану"""
-        if self.game_state.make_move(move_uci):
+        if self.game_controller.make_move(move_uci):
             self.move_made.emit(move_uci)
             self.selected_square = None
             self.possible_moves = []
-            self.update_board_state()
             return True
         return False
     
     def show_promotion_dialog(self, move):
         """Відображення діалогу вибору фігури для перетворення"""
         # Визначення кольору гравця
-        color = self.game_state.get_turn()
+        color = self.game_controller.get_turn()
         
         # Створення діалогу
         dialog = PiecePromotionDialog(color, self)
@@ -215,25 +224,28 @@ class BoardWidget(QWidget):
         dialog.move(pos)
         
         # Відображення діалогу та очікування вибору
-        dialog.exec_()
-        
-        # Отримання обраної фігури
-        selected_piece = dialog.get_selected_piece()
-        
-        if selected_piece:
-            # Формування повного UCI ходу з вказанням фігури
-            full_move = move.uci() + selected_piece.lower()
-            self.make_move(full_move)
+        if dialog.exec_() == PiecePromotionDialog.Accepted:
+            # Отримання обраної фігури
+            selected_piece = dialog.get_selected_piece()
+            
+            if selected_piece:
+                # Формування повного UCI ходу з вказанням фігури
+                full_move = move.uci() + selected_piece.lower()
+                self.make_move(full_move)
         
         self.promotion_move = None
     
     def set_position_from_fen(self, fen):
         """Встановлення позиції з FEN нотації"""
-        self.reset_board(fen)
+        if self.game_controller:
+            self.game_controller.reset(fen)
+            self.update_board_state(self.game_controller.get_board_state())
     
     def get_current_fen(self):
         """Повертає поточну позицію у форматі FEN"""
-        return self.game_state.get_fen()
+        if self.game_controller:
+            return self.game_controller.get_current_fen()
+        return chess.STARTING_FEN
     
     def paintEvent(self, event):
         """Додаткове малювання поверх дошки (рамка, координати)"""
@@ -252,11 +264,13 @@ class BoardWidget(QWidget):
         # Малювання букв (файлів)
         files = "abcdefgh"
         for i, char in enumerate(files):
+            # Нижній ряд
             painter.drawText(
                 i * SQUARE_SIZE + SQUARE_SIZE // 2 - 5, 
                 BOARD_SIZE - 5, 
                 char
             )
+            # Верхній ряд
             painter.drawText(
                 i * SQUARE_SIZE + SQUARE_SIZE // 2 - 5, 
                 15, 
@@ -266,11 +280,13 @@ class BoardWidget(QWidget):
         # Малювання цифр (рангів)
         ranks = "12345678"
         for i, char in enumerate(ranks):
+            # Лівий бік
             painter.drawText(
                 5, 
                 (7 - i) * SQUARE_SIZE + SQUARE_SIZE // 2 + 5, 
                 char
             )
+            # Правий бік
             painter.drawText(
                 BOARD_SIZE - 15, 
                 (7 - i) * SQUARE_SIZE + SQUARE_SIZE // 2 + 5, 
@@ -281,15 +297,15 @@ class BoardWidget(QWidget):
         """Малювання рамки навколо дошки"""
         pen = QPen(Qt.black, 2)
         painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
         painter.drawRect(0, 0, BOARD_SIZE, BOARD_SIZE)
-    
-    def handle_ai_move(self, move_uci):
-        """Обробка ходу, зробленого AI"""
-        self.make_move(move_uci)
     
     def highlight_move(self, move_uci):
         """Підсвічування конкретного ходу на дошці"""
-        move = chess.Move.from_uci(move_uci)
-        self.squares[move.from_square].set_highlighted(True)
-        self.squares[move.to_square].set_highlighted(True)
-        self.update()
+        try:
+            move = chess.Move.from_uci(move_uci)
+            self.squares[move.from_square].set_highlighted(True)
+            self.squares[move.to_square].set_highlighted(True)
+            self.update()
+        except Exception as e:
+            print(f"Error highlighting move: {e}")

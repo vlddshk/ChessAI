@@ -3,10 +3,9 @@ from PyQt5.QtWidgets import (
     QMenuBar, QAction, QFileDialog, QMessageBox, QActionGroup
 )
 from PyQt5.QtGui import QIcon, QKeySequence
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from .board_widget import BoardWidget
 from .game_info import GameInfo
-from .menu import ChessMenuBar 
 from game.controller import GameController
 from game.mode import GameMode, GameModeManager
 from ai.minimax_ai import MinimaxAI
@@ -17,6 +16,7 @@ from constants import (
 )
 import os
 import sys
+import chess
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -63,6 +63,10 @@ class MainWindow(QMainWindow):
         
         # Створення меню
         self.create_menu()
+        
+        # Встановлення зв'язків між компонентами
+        self.board_widget.game_controller = self.game_controller
+        self.game_controller.board_widget = self.board_widget
     
     def create_menu(self):
         """Створення головного меню додатку"""
@@ -161,8 +165,8 @@ class MainWindow(QMainWindow):
     def init_signals(self):
         """Ініціалізація сигналів та слотів"""
         # Сигнали від дошки
+        self.board_widget.square_selected.connect(self.handle_square_selected)
         self.board_widget.move_made.connect(self.handle_player_move)
-        self.board_widget.game_state_changed.connect(self.update_game_state)
         self.board_widget.promotion_required.connect(self.handle_promotion)
         
         # Сигнали від панелі інформації
@@ -175,6 +179,8 @@ class MainWindow(QMainWindow):
         
         # Сигнали від контролера гри
         self.game_controller.ai_move_generated.connect(self.handle_ai_move)
+        self.game_controller.game_state_changed.connect(self.update_game_state)
+        self.game_controller.game_over.connect(self.handle_game_over)
     
     def init_ai(self):
         """Ініціалізація штучного інтелекту"""
@@ -202,34 +208,58 @@ class MainWindow(QMainWindow):
             }}
         """)
     
+    def handle_square_selected(self, square_name):
+        """Обробка вибору клітинки на дошці"""
+        # Цей метод обробляє вибір клітинки перед тим, як зробити хід
+        pass
+    
     def handle_player_move(self, move_uci):
         """Обробка ходу гравця"""
         # Передаємо хід до контролера гри
         if self.game_controller.make_move(move_uci):
+            # Оновлюємо дошку
+            self.board_widget.update_board_state(self.game_controller.get_board_state())
+            
             # Якщо гра продовжується і режим PvAI, запускаємо хід AI
-            if self.mode_manager.current_mode == GameMode.PvAI and not self.game_controller.is_game_over():
+            if (self.mode_manager.current_mode == GameMode.PvAI and 
+                not self.game_controller.is_game_over() and
+                self.game_controller.get_turn() == chess.BLACK):
                 self.make_ai_move()
     
     def make_ai_move(self):
         """Запуск генерації ходу AI"""
-        # Отримуємо поточну позицію
-        fen = self.game_controller.get_current_fen()
-        
-        # Запускаємо генерацію ходу в окремому потоці
-        self.game_controller.generate_ai_move(fen, self.ai)
+        # Використовуємо QTimer для додавання невеликої затримки
+        QTimer.singleShot(300, self.game_controller.request_ai_move)
     
     def handle_ai_move(self, move_uci):
         """Обробка ходу, згенерованого AI"""
-        # Виконуємо хід на дошці
-        self.board_widget.make_move(move_uci)
+        # Виконуємо хід AI
+        if self.game_controller.make_move(move_uci):
+            # Оновлюємо дошку
+            self.board_widget.update_board_state(self.game_controller.get_board_state())
+            
+            # Підсвічуємо хід AI
+            self.board_widget.highlight_move(move_uci)
+            
+            # Оновлюємо стан гри в UI
+            self.update_game_state(self.game_controller.get_game_state_text())
+    
+    def handle_game_over(self, result):
+        """Обробка завершення гри"""
+        # Показуємо повідомлення про результат гри
+        message = {
+            "1-0": "Білі перемогли!",
+            "0-1": "Чорні перемогли!",
+            "1/2-1/2": "Нічия!"
+        }.get(result, "Гра завершена")
         
-        # Підсвічуємо хід AI
-        self.board_widget.highlight_move(move_uci)
+        QMessageBox.information(self, "Гра завершена", message)
     
     def handle_promotion(self, move_uci, piece):
         """Обробка вибору фігури при перетворенні пішака"""
         # Тут ми вже маємо повний хід з вибраною фігурою
-        self.board_widget.make_move(move_uci)
+        if self.game_controller.make_move(move_uci):
+            self.board_widget.update_board_state(self.game_controller.get_board_state())
     
     def update_game_state(self, state_text):
         """Оновлення стану гри в інтерфейсі"""
@@ -241,6 +271,7 @@ class MainWindow(QMainWindow):
     def set_game_mode(self, mode):
         """Встановлення режиму гри"""
         self.mode_manager.set_mode(mode)
+        self.game_controller.set_mode(mode)
         
         # Оновлення інтерфейсу
         self.game_info.set_current_mode(mode)
@@ -254,6 +285,7 @@ class MainWindow(QMainWindow):
     def set_difficulty(self, difficulty_name):
         """Встановлення рівня складності"""
         self.mode_manager.set_difficulty(difficulty_name)
+        self.game_controller.set_difficulty(difficulty_name)
         
         # Оновлення інтерфейсу
         self.game_info.set_current_difficulty(difficulty_name)

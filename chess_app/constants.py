@@ -57,7 +57,8 @@ MAIN_STYLE = f"{STYLES_DIR}main_style.css"
 
 # Шляхи до моделей AI
 MODELS_DIR = "models"
-DEFAULT_MODEL = f"{MODELS_DIR}/chess_evaluator.h5"
+#DEFAULT_MODEL = f"{MODELS_DIR}/chess_evaluator.h5"
+DEFAULT_MODEL = f"{MODELS_DIR}/chess_evaluator.keras"
 
 # =================================================================================
 # НАЛАШТУВАННЯ ГРИ

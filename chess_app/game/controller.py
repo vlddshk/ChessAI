@@ -1,5 +1,7 @@
 import chess
 import time
+import logging
+import random  # Додано імпорт random
 from PyQt5.QtCore import QObject, pyqtSignal
 from game.state import ChessState
 from game.mode import GameMode, GameModeManager
@@ -15,7 +17,7 @@ class GameController(QObject):
     # Сигнали
     move_executed = pyqtSignal(str)              # Хід був виконаний (UCI)
     game_state_changed = pyqtSignal(str)         # Змінився стан гри
-    ai_move_requested = pyqtSignal(str)          # Запит на генерацію ходу AI
+    ai_move_requested = pyqtSignal()             # Запит на генерацію ходу AI
     ai_move_generated = pyqtSignal(str)          # Хід AI згенеровано
     game_over = pyqtSignal(str)                  # Гра завершена (результат)
     promotion_required = pyqtSignal(str, chess.PieceType)  # Потрібно перетворення пішака
@@ -37,9 +39,6 @@ class GameController(QObject):
         """Ініціалізація штучного інтелекту"""
         # Створюємо базовий AI
         self.ai = MinimaxAI(depth=2)
-        
-        # Завантажуємо модель нейромережі (якщо доступно)
-        # Це буде реалізовано в tf_evaluator.py пізніше
     
     def set_mode(self, mode):
         """Встановлення режиму гри"""
@@ -53,11 +52,6 @@ class GameController(QObject):
         config = self.mode_manager.get_ai_config()
         if self.ai:
             self.ai.depth = config.depth
-            self.ai.use_nn = config.use_nn
-            if config.use_nn and config.model_path:
-                # Завантаження моделі нейромережі
-                # Буде реалізовано пізніше
-                pass
     
     def make_move(self, move_uci):
         """
@@ -88,46 +82,44 @@ class GameController(QObject):
             return
             
         self.ai_thinking = True
-        fen = self.state.get_fen()
-        self.ai_move_requested.emit(fen)
+        self.ai_move_requested.emit()
     
-    def generate_ai_move(self, fen):
+    def generate_ai_move(self):
         """Генерація ходу AI (виконується в окремому потоці)"""
-        if not self.ai:
+        if not self.ai or not self.ai_thinking:  # Виправлено перевірку
             return
             
         try:
+            # Отримуємо поточний стан дошки як об'єкт
+            board = self.state.board.copy()
+            
             # Генеруємо хід за допомогою AI
-            move_uci = self.ai.get_move(fen)
+            move_uci = self.ai.get_move(board)  # Передаємо об'єкт дошки, а не FEN
             
             # Перевіряємо чи хід дійсний
-            board = chess.Board(fen)
-            move = chess.Move.from_uci(move_uci)
-            if move not in board.legal_moves:
+            if move_uci not in [m.uci() for m in board.legal_moves]:
                 # Якщо хід недійсний, генеруємо випадковий хід
-                move = list(board.legal_moves)[0]
+                move = random.choice(list(board.legal_moves))
                 move_uci = move.uci()
             
             # Відправляємо результат
             self.ai_move_generated.emit(move_uci)
         except Exception as e:
-            print(f"Помилка генерації ходу AI: {e}")
-            # У разі помилки робимо перший доступний хід
-            board = chess.Board(fen)
+            logging.error(f"Помилка генерації ходу AI: {e}")
+            # У разі помилки робимо випадковий хід
             if board.legal_moves:
-                move = list(board.legal_moves)[0]
+                move = random.choice(list(board.legal_moves))
                 self.ai_move_generated.emit(move.uci())
+            else:
+                logging.error("Немає легальних ходів для AI")
         finally:
             self.ai_thinking = False
     
     def handle_ai_move(self, move_uci):
         """Обробка згенерованого ходу AI"""
-        if not self.ai_thinking:
-            return
-            
         # Виконуємо хід AI
         self.make_move(move_uci)
-        self.ai_thinking = False
+        # Не встановлюємо ai_thinking = False тут, бо вже зроблено в finally блоці
     
     def update_game_state(self):
         """Оновлення та сповіщення про зміни стану гри"""
@@ -191,6 +183,19 @@ class GameController(QObject):
         """Повертає список легальних ходів для заданої клітинки"""
         return self.state.get_legal_moves(square)
     
+    ###
+    def get_game_state_text(self):
+        if self.state.board.is_checkmate():
+            return UI_TEXTS["checkmate"]
+        elif self.state.board.is_stalemate():
+            return UI_TEXTS["stalemate"]
+        elif self.state.board.is_insufficient_material():
+            return UI_TEXTS["draw_insufficient_material"]
+        elif self.state.board.is_check():
+            return UI_TEXTS["check"]
+        else:
+            return UI_TEXTS["turn_white"] if self.state.board.turn == chess.WHITE else UI_TEXTS["turn_black"]
+###
     def get_board_state(self):
         """Повертає об'єкт поточного стану дошки"""
         return self.state.board

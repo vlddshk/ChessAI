@@ -42,13 +42,15 @@ class GameModeManager:
                 name="Середній",
                 depth=3,
                 use_nn=True,
-                model_path="models/chess_evaluator_medium.h5"
+                #model_path="models/chess_evaluator_medium.h5"
+                model_path="models/chess_evaluator1.keras"
             ),
             AIDifficulty(
                 name="Складний",
                 depth=4,
                 use_nn=True,
-                model_path="models/chess_evaluator_advanced.h5"
+                #model_path="models/chess_evaluator_advanced.h5"
+                model_path="models/chess_evaluator2.keras"
             )
         ]
         

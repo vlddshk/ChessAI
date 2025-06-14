@@ -1,6 +1,7 @@
 import os 
 import sys 
-import chess 
+import chess
+import chess.pgn 
 import numpy as np 
 import pandas as pd
 import multiprocessing
@@ -9,7 +10,8 @@ from datetime import datetime
 from chess_app.utils.fen_converter import fen_to_tensor
 from chess_app.constants import TENSOR_SHAPE, STARTING_FEN
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path(__file__))))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+#sys.path.append(os.path.dirname(os.path.dirname(os.path(__file__))))
 
 def process_pgn_file(pgn_path, min_elo=1500, max_positions_per_game=50, max_games=None):
     """
@@ -220,7 +222,7 @@ def save_metadata(positions, output_dir, timestamp):
         "white_win_percent": white_wins / len(positions) * 100,
         "black_win_percent": black_wins / len(positions) * 100,
         "draw_percent": draws / len(positions) * 100,
-        "creation_date": datetime.now().strfrime("%Y-%m-%d %H:%M:%S"),
+        "creation_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tensor_shape": TENSOR_SHAPE
     }
 
