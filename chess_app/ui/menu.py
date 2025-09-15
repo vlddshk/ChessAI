@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import (
-    QMenuBar, QMenu, QAction, QActionGroup, 
+    QMenuBar, QAction, QActionGroup, 
     QWidget, QHBoxLayout, QLabel, QComboBox
 )
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtCore import Qt, pyqtSignal
+import chess
 from constants import UI_TEXTS
 from game.mode import GameMode
 from utils.position import get_piece_icon
@@ -31,7 +32,6 @@ class ChessMenuBar(QMenuBar):
         # Меню "Гра"
         self.game_menu = self.addMenu(UI_TEXTS["game_menu"])
         
-        # Дії меню "Гра"
         self.new_game_action = self.create_action(
             UI_TEXTS["new_game"], 
             "new_game",
@@ -63,7 +63,6 @@ class ChessMenuBar(QMenuBar):
             UI_TEXTS["exit_tooltip"]
         )
         
-        # Додавання дій до меню "Гра"
         self.game_menu.addAction(self.new_game_action)
         self.game_menu.addAction(self.restart_action)
         self.game_menu.addSeparator()
@@ -75,7 +74,6 @@ class ChessMenuBar(QMenuBar):
         # Меню "Налаштування"
         self.settings_menu = self.addMenu(UI_TEXTS["settings_menu"])
         
-        # Група дій для режимів гри
         self.mode_action_group = QActionGroup(self)
         self.mode_action_group.setExclusive(True)
         
@@ -100,10 +98,8 @@ class ChessMenuBar(QMenuBar):
         self.settings_menu.addAction(self.pvai_action)
         self.settings_menu.addSeparator()
         
-        # Меню складності
         self.difficulty_menu = self.settings_menu.addMenu(UI_TEXTS["difficulty"])
         
-        # Група дій для складності
         self.difficulty_action_group = QActionGroup(self)
         self.difficulty_action_group.setExclusive(True)
         
@@ -257,13 +253,13 @@ class GameModeSelector(QWidget):
         self.setLayout(layout)
         self.update_difficulty_visibility()
     
-    def on_mode_changed(self, index):
+    def on_mode_changed(self):
         """Обробник зміни режиму гри"""
         mode = self.mode_combo.currentData()
         self.mode_changed.emit(mode)
         self.update_difficulty_visibility()
     
-    def on_difficulty_changed(self, index):
+    def on_difficulty_changed(self):
         """Обробник зміни складності"""
         difficulty = self.difficulty_combo.currentData()
         self.difficulty_changed.emit(difficulty)
@@ -324,35 +320,3 @@ class PiecePromotionMenu(QWidget):
         self.selected_piece = piece
         self.piece_selected.emit(piece)
         self.close()
-
-# Приклад використання
-if __name__ == "__main__":
-    from PyQt5.QtWidgets import QApplication, QMainWindow
-    import sys
-    from chess_app.constants import UI_TEXTS
-    
-    app = QApplication(sys.argv)
-    
-    # Тестування головного меню
-    main_win = QMainWindow()
-    main_win.setWindowTitle(UI_TEXTS["window_title"])
-    
-    menu_bar = ChessMenuBar()
-    main_win.setMenuBar(menu_bar)
-    
-    # Підключення сигналів
-    menu_bar.new_game_requested.connect(lambda: print("New Game Requested"))
-    menu_bar.restart_game_requested.connect(lambda: print("Restart Game Requested"))
-    menu_bar.game_mode_changed.connect(lambda mode: print(f"Game Mode Changed: {mode}"))
-    menu_bar.difficulty_changed.connect(lambda diff: print(f"Difficulty Changed: {diff}"))
-    
-    main_win.resize(800, 600)
-    main_win.show()
-    
-    # Тестування вибору режиму гри
-    selector = GameModeSelector()
-    selector.mode_changed.connect(lambda mode: print(f"Selector Mode: {mode}"))
-    selector.difficulty_changed.connect(lambda diff: print(f"Selector Difficulty: {diff}"))
-    selector.show()
-    
-    sys.exit(app.exec_())

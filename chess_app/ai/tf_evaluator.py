@@ -36,7 +36,7 @@ class TFEvaluator:
     def load_model(self):
         start_time = time.time()
 
-        if not os.path.exists(self.load_model(self.model_path)):
+        if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
         
         try:
@@ -119,6 +119,7 @@ class TFEvaluator:
         except Exception as e:
             logger.error(f"Error evaluating position: {fen}")
             logger.error(f"Error message: {str(e)}")
+            logger.warning("NN failed, agent may fallback to random move")
             return 0.0  # Повертаємо нейтральну оцінку у разі помилки
     
     def batch_evaluate(self, fen_list):
@@ -240,35 +241,3 @@ def create_basic_model(input_shape=TENSOR_SHAPE):
     
     return model
 
-# Приклад використання
-if __name__ == "__main__":
-    # Ініціалізація оцінювача
-    evaluator = TFEvaluator()
-    
-    # Прогрів моделі
-    evaluator.warmup()
-    
-    # Оцінка позицій
-    positions = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",  # Початкова позиція
-        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1",  # Сицилійський захист
-        "8/8/8/4k3/8/8/8/R3K3 w Q - 0 1",  # Білий король та тура
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"  # Складніша позиція
-    ]
-    
-    print("\nPosition evaluations:")
-    for fen in positions:
-        eval = evaluator.evaluate(fen)
-        print(f"{fen[:30]}... : {eval:.4f}")
-    
-    # Оцінка групи позицій
-    print("\nBatch evaluation:")
-    batch_evals = evaluator.batch_evaluate(positions)
-    for fen, eval in zip(positions, batch_evals):
-        print(f"{fen[:30]}... : {eval:.4f}")
-    
-    # Статистика продуктивності
-    stats = evaluator.get_performance_stats()
-    print("\nPerformance statistics:")
-    for k, v in stats.items():
-        print(f"{k}: {v}")

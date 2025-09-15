@@ -1,5 +1,6 @@
 import chess 
 import numpy as np
+#from chess_app.constants import PIECE_TO_INDEX, TENSOR_SHAPE 
 from constants import PIECE_TO_INDEX, TENSOR_SHAPE 
 
 def fen_to_tensor(fen):

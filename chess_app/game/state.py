@@ -36,7 +36,6 @@ class ChessState:
                 return True
             return False
         except (ValueError, AssertionError):
-            # Невірний формат ходу
             return False
 
     def update_game_state(self):
@@ -103,13 +102,18 @@ class ChessState:
         """Повертає клітинку короля заданого кольору"""
         return self.board.king(color)
 
-    def reset(self, fen=STARTING_FEN):
+
+    def reset(self, fen=None): 
         """Скидає гру до початкового стану або заданої FEN позиції"""
         self.board = chess.Board(fen)
         self.last_move = None
         self.game_state = GAME_STATE_ONGOING
         self.result = None
         self.update_game_state()
+        if fen is None:
+            fen = STARTING_FEN
+        self.board = chess.Board(fen)
+        self.last_move = None
 
     def get_board_for_ai(self):
         """Повертає копію об'єкта дошки для використання AI"""

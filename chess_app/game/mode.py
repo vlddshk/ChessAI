@@ -7,8 +7,8 @@ class GameMode(Enum):
     """
     Перелік доступних режимів гри
     """
-    PvP = auto()      # Гравець проти гравця
-    PvAI = auto()     # Гравець проти штучного інтелекту
+    PvP = auto()      
+    PvAI = auto()     
 
 @dataclass
 class AIDifficulty:
@@ -17,7 +17,6 @@ class AIDifficulty:
     """
     name: str              # Назва рівня складності
     depth: int             # Глибина пошуку для алгоритму minimax
-    use_nn: bool           # Чи використовувати нейромережу для оцінки позиції
     model_path: Optional[str] = None  # Шлях до моделі нейромережі
 
 class GameModeManager:
@@ -36,20 +35,15 @@ class GameModeManager:
             AIDifficulty(
                 name="Легкий",
                 depth=2,
-                use_nn=False
-            ),
+            ), 
             AIDifficulty(
                 name="Середній",
                 depth=3,
-                use_nn=True,
-                #model_path="models/chess_evaluator_medium.h5"
                 model_path="models/chess_evaluator1.keras"
             ),
             AIDifficulty(
                 name="Складний",
                 depth=4,
-                use_nn=True,
-                #model_path="models/chess_evaluator_advanced.h5"
                 model_path="models/chess_evaluator2.keras"
             )
         ]
@@ -101,30 +95,3 @@ class GameModeManager:
     def get_available_difficulties(self) -> List[str]:
         """Повертає список доступних рівнів складності"""
         return [diff.name for diff in self.available_difficulties]
-
-# Тестування функціональності
-if __name__ == "__main__":
-    manager = GameModeManager()
-    
-    print("Доступні режими:")
-    for mode, name in manager.available_modes.items():
-        print(f"- {name}")
-    
-    print("\nДоступні рівні складності:")
-    for diff in manager.available_difficulties:
-        print(f"- {diff.name} (глибина: {diff.depth}, нейромережа: {'так' if diff.use_nn else 'ні'})")
-    
-    print("\nТестування зміни режимів:")
-    manager.set_mode(GameMode.PvP)
-    print(f"Поточний режим: {manager.get_mode_name()}")
-    
-    manager.set_mode(GameMode.PvAI)
-    print(f"Поточний режим: {manager.get_mode_name()}")
-    
-    print("\nТестування зміни складності:")
-    manager.set_difficulty("Складний")
-    print(f"Поточна складність: {manager.get_difficulty_name()}")
-    
-    print("\nПеревірка ходу AI:")
-    print(f"Чи ходить AI за білих? {manager.is_ai_turn(True)}")
-    print(f"Чи ходить AI за чорних? {manager.is_ai_turn(False)}")

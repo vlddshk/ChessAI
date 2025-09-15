@@ -76,7 +76,7 @@ def check_resources():
 
 def show_resource_error():
     """Відображає повідомлення про помилку ресурсів"""
-    app = QApplication(sys.argv)
+    #app = QApplication(sys.argv)
     error_msg = """
     <b>Помилка завантаження ресурсів</b><br><br>
     Додатку не вдалося знайти необхідні файли ресурсів (зображення фігур).<br>
@@ -93,7 +93,7 @@ def show_resource_error():
 
 def show_critical_error(message):
     """Відображає повідомлення про критичну помилку"""
-    app = QApplication(sys.argv)
+    #app = QApplication(sys.argv)
     error_msg = f"""
     <b>Критична помилка</b><br><br>
     Виникла непередбачена помилка:<br>

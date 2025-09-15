@@ -1,6 +1,6 @@
 import chess
 import numpy as np
-from typing import List, Tuple, Dict, Optional
+from typing import Dict
 from constants import PIECE_VALUES, TENSOR_SHAPE, PIECE_TO_INDEX
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication
@@ -412,39 +412,3 @@ def get_piece_icon(symbol, size=32):
     if pixmap:
         return QIcon(pixmap)
     return QIcon()
-
-# Тестування функцій
-if __name__ == "__main__":
-    # Створюємо тестову позицію
-    board = chess.Board()
-    
-    print("Початкова позиція:")
-    print(board)
-    
-    # Тестування перетворення в тензор
-    tensor = board_to_tensor(board)
-    print(f"\nРозмір тензора: {tensor.shape}")
-    print(f"Кількість ненульових елементів: {np.count_nonzero(tensor)}")
-    
-    # Оцінка позиції
-    evaluation = evaluate_position(board)
-    print(f"\nОцінка початкової позиції: {evaluation:.2f}")
-    
-    # Характеристики позиції
-    features = get_position_features(board)
-    print("\nХарактеристики позиції:")
-    for key, value in features.items():
-        print(f"{key}: {value:.2f}")
-    
-    # Перевірка на ендшпіль
-    print(f"\nЧи є ендшпіль? {is_endgame(board)}")
-    
-    # Складність позиції
-    complexity = get_position_complexity(board)
-    print(f"\nСкладність позиції: {complexity:.2f}")
-    
-    # Порівняння позицій
-    board2 = chess.Board()
-    board2.push_san("e4")
-    similarity = compare_positions(board.fen(), board2.fen())
-    print(f"\nПодібність позицій: {similarity:.2f}")

@@ -1,7 +1,7 @@
 import chess
 import time
 import logging
-import random  # Додано імпорт random
+import random  
 from PyQt5.QtCore import QObject, pyqtSignal
 from game.state import ChessState
 from game.mode import GameMode, GameModeManager
@@ -67,7 +67,7 @@ class GameController(QObject):
             
             # Перевіряємо чи гра продовжується
             if not self.state.is_game_over():
-                # Якщо це режим PvAI і зараз ходить AI
+              # Якщо це режим PvAI і зараз ходить AI
                 if (self.mode_manager.current_mode == GameMode.PvAI and 
                     self.mode_manager.is_ai_turn(self.state.get_turn())):
                     # Запускаємо генерацію ходу AI
@@ -119,7 +119,6 @@ class GameController(QObject):
         """Обробка згенерованого ходу AI"""
         # Виконуємо хід AI
         self.make_move(move_uci)
-        # Не встановлюємо ai_thinking = False тут, бо вже зроблено в finally блоці
     
     def update_game_state(self):
         """Оновлення та сповіщення про зміни стану гри"""
@@ -149,6 +148,12 @@ class GameController(QObject):
         self.ai_thinking = False
         self.ai_move_queue = None
         self.update_game_state()
+         
+        try:
+            if hasattr(self, "board_widget") and self.board_widget is not None:
+                self.board_widget.update_board_state(self.state.board)
+        except Exception as e:
+            logging.debug(f"Board update after reset failed: {e}")
     
     def get_current_fen(self):
         """Повертає поточну позицію у форматі FEN"""
@@ -158,6 +163,7 @@ class GameController(QObject):
         """Перевіряє чи гра завершена"""
         return self.state.is_game_over()
     
+    #перевірити
     def handle_promotion(self, move_uci):
         """
         Обробка перетворення пішака
@@ -172,18 +178,53 @@ class GameController(QObject):
         # Відправляємо сигнал для відображення діалогу
         self.promotion_required.emit(move_uci, color)
     
-    def complete_promotion(self, move_uci, piece_symbol):
+
+
+    def complete_promotion(self, move_uci, piece_symbol=None):
         """
-        Завершення перетворення пішака з обраною фігурою
-        :param move_uci: Повний хід з фігурою (наприклад, "a7a8q")
+        Завершення перетворення пішака.
+        :param move_uci: Базовий хід без букви промоції (наприклад 'a7a8') або повний ('a7a8q')
+        :param piece_symbol: символ фігури ('q','r','b','n') або None
+        :return: True якщо хід успішно виконаний, інакше False
         """
-        self.make_move(move_uci)
-    
+        try:
+            # Якщо вже повний UCI (довжина 5) — використовуємо його
+            if len(move_uci) == 5:
+                full_move = move_uci
+            else:
+                # Треба мати piece_symbol для складання повного UCI
+                if not piece_symbol:
+                    logging.warning("complete_promotion called without piece_symbol")
+                    return False
+                promo_char = str(piece_symbol).strip().lower()[0]
+                if promo_char not in ('q', 'r', 'b', 'n'):
+                    logging.warning(f"Invalid promotion piece symbol: {piece_symbol}")
+                    return False
+                full_move = move_uci + promo_char
+
+            # Перевірка формату і легальності
+            try:
+                move_obj = chess.Move.from_uci(full_move)
+            except Exception:
+                logging.warning(f"Invalid UCI promotion move format: {full_move}")
+                return False
+
+            legal_uci_moves = {m.uci() for m in self.state.board.legal_moves}
+            if full_move not in legal_uci_moves:
+                logging.warning(f"Attempted illegal promotion move: {full_move}. Legal moves: {len(legal_uci_moves)}")
+                return False
+
+            return self.make_move(full_move)
+        except Exception as e:
+            logging.error(f"Error in complete_promotion: {e}")
+            return False
+
+
     def get_legal_moves(self, square=None):
         """Повертає список легальних ходів для заданої клітинки"""
         return self.state.get_legal_moves(square)
     
-    ###
+    
     def get_game_state_text(self):
         if self.state.board.is_checkmate():
             return UI_TEXTS["checkmate"]
@@ -195,7 +236,7 @@ class GameController(QObject):
             return UI_TEXTS["check"]
         else:
             return UI_TEXTS["turn_white"] if self.state.board.turn == chess.WHITE else UI_TEXTS["turn_black"]
-###
+
     def get_board_state(self):
         """Повертає об'єкт поточного стану дошки"""
         return self.state.board

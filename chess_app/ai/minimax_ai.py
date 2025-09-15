@@ -237,7 +237,6 @@ class MinimaxAI(AIInterface):
         
         return passed * 0.5 - doubled * 0.3 - isolated * 0.4
 
-    # Решта методів залишаються без змін...
     def set_difficulty(self, level: int):
         if level == 1:
             self.depth = 2
