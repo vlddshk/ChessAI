@@ -37,7 +37,7 @@ ChessApp/
 │       └── fen_converter.py    # Конвертація FEN у тензор
 │
 ├── models/                     # Треновані моделі TensorFlow
-│   └── chess_evaluator.h5      # (додати пізніше)
+│   └── chess_evaluator.h5      # модель
 │
 ├── resources/                  # Ресурси додатку
 │   ├── pieces/                 # Зображення фігур
